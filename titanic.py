@@ -8,17 +8,18 @@ to structure this project.
 Author: Mark Xavier
 """
 
-def read_training_set():
+import pandas as pd
+
+TRAIN_FILE = r'inputs/train.csv'
+TEST_FILE = r'inputs/test.csv'
+
+def main():
     """
     """
 
-    pass
+    training_set = pd.read_csv(TRAIN_FILE)
+    print(training_set.describe())
 
-def read_test_set():
-    """
-    """
-
-    pass
 
 if __name__ == '__main__':
-    pass
+    main()

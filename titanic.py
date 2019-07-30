@@ -11,18 +11,22 @@ Author: Mark Xavier
 import sys
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 
 # Models and metrics
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
 from sklearn.metrics import accuracy_score
 
 import pipelines as pl
 
 TRAIN_FILE = r'inputs/train.csv'
 TEST_FILE = r'inputs/test.csv'
+ACCURACY_LIM = 0.8
 
 def run_grid_search_cv(x, y, model_instance, standardize, one_hot, label, params, verbose=False):
     """
@@ -51,6 +55,22 @@ def get_inputs():
 
     return train_x, train_y
 
+def create_neural_network(input_shape):
+    """
+    """
+
+    nn = keras.Sequential()
+    nn.add(keras.layers.Input(input_shape))
+    nn.add(keras.layers.Dense(30, activation='relu'))
+    nn.add(keras.layers.BatchNormalization())
+    nn.add(keras.layers.Dense(30, activation='relu'))
+    nn.add(keras.layers.BatchNormalization())
+    nn.add(keras.layers.Dense(1, activation='sigmoid'))
+    nn.compile(optimizer='adam', loss='binary_crossentropy', 
+               metrics=['accuracy'])
+
+    return nn
+
 def predict(model):
     """
     """
@@ -76,7 +96,7 @@ def main():
     train_x, train_y = get_inputs()
     
     # list of models
-    models = [
+    model_details = [
         (LogisticRegression(solver='lbfgs', max_iter=1000), True, True, 'LogisticRegression'),
         (SGDClassifier(), True, True, 'SGDClassifier'),
         (DecisionTreeClassifier(), False, False, 'DecisionTreeClassifier'),
@@ -90,16 +110,22 @@ def main():
         {'n_estimators':[2, 5, 10, 12, 15], 'max_depth':[2, 4, 6, 8, 10]}
     ]
 
-    # Find the best model
-    accuracy = 0
-    best_model = None
-    for index, model in enumerate(models):
-        result, m = run_grid_search_cv(train_x, train_y.values, *model, params[index])
-        if result > accuracy:
-            accuracy = result
-            best_model = m
+    models = []
 
-    predict(best_model)
+    # Get best sklearn models
+    for index, dtls in enumerate(model_details):
+        accuracy, model = run_grid_search_cv(train_x, train_y.values, *dtls, params[index])
+        if accuracy >= ACCURACY_LIM:
+            models.append((dtls[-1], model))
+    print('Models in use: %d' % len(models))
+
+    # Create an ensemble method
+    x_clean = pl.get_pipeline(True, True).fit_transform(train_x)
+    voting_classifier = VotingClassifier(models)
+    voting_classifier.fit(x_clean, train_y.values)
+    ypred = voting_classifier.predict(x_clean)
+    print('Accuracy: %.3f' % accuracy_score(train_y.values, ypred))
+
 
 if __name__ == '__main__':
     main()
